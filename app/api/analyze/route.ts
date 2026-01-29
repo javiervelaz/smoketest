@@ -10,10 +10,27 @@ type ReqBody = {
   language : string;
 };
 
-function safeTrim(s: string, max = 18000) {
-  const t = String(s ?? "").trim();
-  return t.length > max ? t.slice(0, max) : t;
+
+
+function clampStr(s: unknown, max = 60) {
+  const t = String(s ?? "").replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  // dejamos 1 char para el …
+  return t.slice(0, max - 1).trimEnd() + "…";
 }
+
+function sanitizeReport(report: any) {
+  if (Array.isArray(report?.score_breakdown)) {
+    report.score_breakdown = report.score_breakdown.map((b: any) => ({
+      ...b,
+      evidence: Array.isArray(b?.evidence)
+        ? b.evidence.map((e: any) => clampStr(e, 60))
+        : [],
+    }));
+  }
+  return report;
+}
+
 
 function normalizeJobText(input: string) {
   let s = String(input ?? "");
@@ -130,7 +147,8 @@ export async function POST(req: Request) {
     };
 
     // Validación estricta
-    const validated = SmokeTestReportV1Schema.parse(reportWithMeta);
+    const sanitized = sanitizeReport(reportWithMeta);
+    const validated = SmokeTestReportV1Schema.parse(sanitized);
 
     return NextResponse.json(validated, { status: 200 });
   } catch (err: any) {
